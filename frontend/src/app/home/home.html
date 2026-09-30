@@ -1,0 +1,112 @@
+<section class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Connecticut Data Collaborative</p>
+    <h1>Connecting people and data for good</h1>
+    <p class="lede">
+      CTData makes public data accessible and useful so communities, nonprofits and policymakers
+      can make better decisions for Connecticut.
+    </p>
+    <div class="actions">
+      <a class="btn primary" href="#education">Explore Education Data</a>
+      <button class="btn outline" (click)="askAssistant.emit()">
+        <span class="spark" aria-hidden="true">✦</span> Ask the AI Data Assistant
+      </button>
+    </div>
+  </div>
+</section>
+
+<section class="stats" aria-label="Coverage">
+  <div class="wrap">
+    @for (s of stats; track s.label) {
+      <div><strong>{{ s.value }}</strong><span>{{ s.label }}</span></div>
+    }
+  </div>
+</section>
+
+<section class="section" id="topics">
+  <div class="wrap">
+    <h2>Data by Topic</h2>
+    <p class="section-lede">Find trusted, local data on the issues that matter to your community.</p>
+    <div class="topic-grid">
+      @for (t of topics; track t.name) {
+        <a class="topic" [class.featured]="t.ai" [href]="t.href" target="_blank" rel="noopener">
+          <span class="icon" aria-hidden="true">{{ t.icon }}</span>
+          <h3>{{ t.name }}</h3>
+          <p>{{ t.text }}</p>
+          @if (t.ai) {
+            <span class="badge">✦ AI assistant available</span>
+          }
+        </a>
+      }
+    </div>
+  </div>
+</section>
+
+<section class="section alt" id="education">
+  <div class="wrap">
+    <h2>Education Data</h2>
+    <p class="section-lede">Datasets from the CTData education collection, sourced from EdSight and CTData projects.</p>
+
+    <div class="assistant-callout">
+      <div>
+        <h3>Not sure which dataset you need?</h3>
+        <p>Our assistant asks a few quick questions about you, then explains education data in the way that works best for you, whether you're a student, parent, teacher or researcher.</p>
+      </div>
+      <button class="btn primary" (click)="askAssistant.emit()">Start a conversation</button>
+    </div>
+
+    <div class="dataset-grid">
+      @for (d of datasets; track d.name) {
+        <article class="dataset">
+          <p class="group">{{ d.group }}</p>
+          <h3>{{ d.name }}</h3>
+          <p>{{ d.by }}</p>
+          <a [href]="d.href" target="_blank" rel="noopener">View data →</a>
+        </article>
+      }
+    </div>
+  </div>
+</section>
+
+<section class="section skills">
+  <div class="wrap split">
+    <div>
+      <h2>Learn Data Skills</h2>
+      <p>
+        From data literacy basics to storytelling and visualization, CTData Academy helps people
+        build the skills to find, understand and use data.
+      </p>
+      <a class="btn light" href="https://www.ctdata.org/learn-data-skills" target="_blank" rel="noopener">Explore CTData Academy</a>
+    </div>
+    <ul>
+      <li>Build Your Data Literacy</li>
+      <li>Analyzing Quantitative Data</li>
+      <li>Become a Data Storyteller</li>
+      <li>Create Impactful Data Visualizations</li>
+      <li>Youth Data Programs</li>
+    </ul>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <h2>From the Blog</h2>
+    <div class="post-grid">
+      @for (p of posts; track p.href) {
+        <a class="post" [href]="p.href" target="_blank" rel="noopener">
+          <span>{{ p.date }}</span>
+          <h3>{{ p.title }}</h3>
+          <em>Read more →</em>
+        </a>
+      }
+    </div>
+  </div>
+</section>
+
+<section class="newsletter">
+  <div class="wrap">
+    <h2>Stay connected</h2>
+    <p>Get new data, events and training opportunities in your inbox.</p>
+    <a class="btn primary" href="https://www.ctdata.org/newsletter-signups" target="_blank" rel="noopener">Sign up for our newsletter</a>
+  </div>
+</section>

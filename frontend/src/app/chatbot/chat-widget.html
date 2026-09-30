@@ -1,0 +1,128 @@
+@if (isOpen()) {
+  <div class="backdrop" (click)="close()"></div>
+}
+
+<section
+  class="panel"
+  [class.open]="isOpen()"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="chat-title"
+  [attr.aria-hidden]="!isOpen()"
+  [attr.inert]="isOpen() ? null : ''"
+>
+  <header class="panel-header">
+    <div class="bot-avatar" aria-hidden="true">CT</div>
+    <div class="titles">
+      <h2 id="chat-title">CTData Assistant</h2>
+      <p>Education data · answers tailored to you</p>
+    </div>
+    @if (!onboarding()) {
+      <button class="ghost" (click)="restart()" title="Answer the profile questions again">Change profile</button>
+    }
+    <button class="icon" (click)="close()" aria-label="Close chat">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+    </button>
+  </header>
+
+  <div class="panel-body">
+    <aside class="sidebar">
+      @if (onboarding()) {
+        <h3>Getting to know you</h3>
+        <ol class="progress">
+          @for (s of steps; track s.key; let i = $index) {
+            <li [class.done]="i < step()" [class.current]="i === step()">
+              <span class="dot">{{ i < step() ? '✓' : i + 1 }}</span>
+              {{ s.key === 'familiarity' ? 'Data experience' : (s.key | titlecase) }}
+            </li>
+          }
+        </ol>
+        <p class="muted">Your answers help me pick the right words, examples and level of detail. They stay in this browser.</p>
+        <button class="link" (click)="skipOnboarding()">Skip these questions</button>
+      } @else {
+        <h3>Your profile</h3>
+        @if (profileSummary().length) {
+          <dl class="profile">
+            @for (item of profileSummary(); track item.label) {
+              <dt>{{ item.label === 'familiarity' ? 'Data experience' : (item.label | titlecase) }}</dt>
+              <dd>{{ item.value }}</dd>
+            }
+          </dl>
+        } @else {
+          <p class="muted">General audience</p>
+        }
+        <h3>Try asking</h3>
+        <ul class="suggestions">
+          @for (q of suggestions; track q) {
+            <li><button (click)="choose(q)" [disabled]="loading()">{{ q }}</button></li>
+          }
+        </ul>
+      }
+      <p class="scope">Currently answering from <a href="https://www.ctdata.org/education" target="_blank" rel="noopener">ctdata.org/education</a>. More sections coming soon.</p>
+    </aside>
+
+    <div class="conversation">
+      <div class="messages" #scroller aria-live="polite">
+        @for (m of messages(); track $index; let i = $index) {
+          <div class="msg" [class.user]="m.role === 'user'">
+            @if (m.role === 'assistant') {
+              <div class="bot-avatar small" aria-hidden="true">CT</div>
+            }
+            <div class="bubble-wrap">
+              <div class="bubble" [innerHTML]="m.content | formatMessage"></div>
+              @if (m.sources?.length) {
+                <div class="sources">
+                  <span>Sources:</span>
+                  @for (s of m.sources; track s.url) {
+                    <a [href]="s.url" target="_blank" rel="noopener">{{ s.title }}</a>
+                  }
+                </div>
+              }
+              @if (m.mode === 'offline') {
+                <div class="mode">Offline mode: showing matching content from the site (LM Studio not connected)</div>
+              }
+              @if (m.options && isLast(i)) {
+                <div class="chips">
+                  @for (o of m.options; track o) {
+                    <button (click)="choose(o)" [disabled]="loading()">{{ o }}</button>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        }
+        @if (loading()) {
+          <div class="msg">
+            <div class="bot-avatar small" aria-hidden="true">CT</div>
+            <div class="bubble typing" aria-label="Assistant is typing"><span></span><span></span><span></span></div>
+          </div>
+        }
+      </div>
+
+      <form class="composer" (ngSubmit)="submit()">
+        <textarea
+          #input
+          name="draft"
+          rows="1"
+          [(ngModel)]="draft"
+          (keydown)="onKeydown($event)"
+          [placeholder]="placeholder()"
+          [disabled]="onboarding() && !steps[step()].freeText"
+          aria-label="Message"
+        ></textarea>
+        <button type="submit" class="send" [disabled]="!draft.trim() || loading()" aria-label="Send">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l16-8-6 16-2-7-8-1z" /></svg>
+        </button>
+      </form>
+      <p class="disclaimer">AI answers can be wrong. Check the linked sources before using numbers.</p>
+    </div>
+  </div>
+</section>
+
+<button class="launcher" [class.hidden]="isOpen()" (click)="open()" aria-label="Open CTData Assistant chat">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M4 5h16v10H9l-5 4V5z" />
+    <circle cx="9" cy="10" r="1" /><circle cx="12" cy="10" r="1" /><circle cx="15" cy="10" r="1" />
+  </svg>
+  <span>Ask CTData</span>
+</button>
