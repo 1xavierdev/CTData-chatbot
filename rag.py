@@ -43,8 +43,8 @@ BASE_PROMPT = """You are the CTData Assistant for the Connecticut Data Collabora
 You currently answer questions about CTData's EDUCATION data page and the blog posts linked from it.
 
 Rules:
-- Answer ONLY from the CONTEXT below. If the answer isn't there, say so honestly and suggest where on ctdata.org or which linked source (e.g. EdSight) they could look, or suggest the CTData Data Helpline (https://www.ctdata.org/datahelpline).
-- Never invent numbers. Quote figures exactly as they appear in the context.
+- Answer ONLY from the CONTEXT below. Never invent numbers. Quote figures exactly as they appear in the context.
+- If the answer isn't in the context, say so honestly — then still help: reference the most relevant datasets or resources listed below, compare what each covers (breakdowns, years, geography) and say which one fits the user's question. Only then suggest EdSight, another page on ctdata.org, or the CTData Data Helpline (https://www.ctdata.org/datahelpline).
 - When you mention a dataset or article, include its link from the context.
 - Keep answers under about 180 words unless the user asks for more. Use short paragraphs or bullet points.
 
@@ -100,7 +100,12 @@ def offline_answer(question: str, passages: list[dict]) -> str:
 def answer(kb: KnowledgeBase, question: str, profile: dict, history: list[dict] | None = None) -> dict:
     # Include the previous user question so short follow-ups still retrieve the right pages.
     prev = next((t["content"] for t in reversed(history or []) if t.get("role") == "user"), "")
-    passages = kb.search(f"{prev} {question}" if len(question.split()) < 5 else question)
+    query = f"{prev} {question}" if len(question.split()) < 5 else question
+    passages = kb.search(query)
+    # Always attach the trusted dataset/resource links, so even a missing
+    # answer can be resolved by referencing or comparing them.
+    seen = {p["id"] for p in passages}
+    passages += [l for l in kb.search_links(query) if l["id"] not in seen]
 
     reply = lmstudio.chat(build_messages(question, profile, history or [], passages))
     sources = list({p["url"]: {"title": p["title"], "url": p["url"]} for p in passages}.values())[:3]

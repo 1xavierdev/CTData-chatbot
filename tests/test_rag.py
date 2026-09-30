@@ -41,6 +41,13 @@ class KnowledgeBaseTests(unittest.TestCase):
     def test_unrelated_question_returns_nothing(self):
         self.assertEqual(self.kb.search("weather forecast"), [])
 
+    def test_search_links_finds_relevant_dataset_links(self):
+        results = self.kb.search_links("graduation rates")
+        self.assertTrue(any("public-edsight.ct.gov/grad" in r["text"] for r in results))
+
+    def test_search_links_empty_when_nothing_matches(self):
+        self.assertEqual(self.kb.search_links("weather forecast"), [])
+
 
 class RagTests(unittest.TestCase):
     def setUp(self):
@@ -65,6 +72,15 @@ class RagTests(unittest.TestCase):
         sent = chat.call_args[0][0]
         self.assertIn("8th-grade", sent[0]["content"])
         self.assertIn("Four Year Graduation Rates", sent[-1]["content"])
+
+    def test_prompt_includes_trusted_resources_for_comparison(self):
+        # "by town" is not in the context (missing answer), but related dataset
+        # links must still be attached so the bot can reference/compare them.
+        with mock.patch("lmstudio.chat", return_value="answer") as chat:
+            rag.answer(self.kb, "do you have chronic absenteeism by town?", {})
+        sent = chat.call_args[0][0]
+        self.assertIn("Links to datasets", sent[-1]["content"])
+        self.assertIn("compare what each covers", sent[0]["content"])
 
 
 class ApiTests(unittest.TestCase):

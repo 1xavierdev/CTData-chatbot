@@ -6,6 +6,7 @@ An AI assistant for [ctdata.org](https://www.ctdata.org), built for a hackathon 
 - Before the first question, the bot asks 4 quick questions: **profession, age group, education level and data experience**. Every answer is then tailored to that person (reading level, vocabulary, examples).
 - Answers come from a **knowledge base scraped from [ctdata.org/education](https://www.ctdata.org/education)** and the blog posts it links to. Pages are embedded and searched locally (RAG), and replies are written by a model running in **LM Studio**.
 - If LM Studio isn't running, the bot falls back to keyword search and shows matching datasets and links, so the demo never breaks.
+- **Citations come from a trusted-source whitelist only** (`scraper.py`): `data.ctdata.org` always ranks first and is never dropped, then official portals — EdSight (CT Dept. of Education), `ct.gov`, `census.gov`, `ed.gov` — plus ctdata.org's own pages and any other official `.gov` site. Everything else (blogs, news sites, social media, ...) is filtered out, and links are capped per page (default 25, `--max-links`) to keep the knowledge base small and fast.
 
 ```
 Browser (Angular)  ──/api/chat──▶  Flask (server.py)
@@ -59,9 +60,9 @@ cd frontend && npx ng test --watch=false
 
 | Path | What it does |
 | --- | --- |
-| `scraper.py` | Crawls a ctdata.org section and linked blog posts, and keeps dataset links |
+| `scraper.py` | Crawls a ctdata.org section and linked blog posts; keeps dataset links from trusted sources only (data.ctdata.org first, then official portals), capped for speed |
 | `kb.py` | Chunking, LM Studio embeddings, semantic + BM25 search |
-| `rag.py` | Persona rules (age / education / profession / data experience) and prompt building |
+| `rag.py` | Persona rules (age / education / profession / data experience), prompt building, and attaching trusted dataset links so gaps can be answered by referencing/comparing resources |
 | `lmstudio.py` | Small client for LM Studio's OpenAI-compatible API |
 | `server.py` | Flask API (`/api/chat`, `/api/health`); also serves the built Angular app |
 | `frontend/src/app/chatbot/` | Chat widget: launcher, 80% dialog, onboarding, chat, sources |

@@ -6,8 +6,9 @@ Usage:
 
 The crawler starts from one or more section pages, follows links that stay on
 www.ctdata.org (section sub-pages and blog posts linked from the section), and
-writes data/pages.json. External dataset links (EdSight, ArcGIS, ...) are not
-crawled, but their titles and URLs are saved so the bot can point users to them.
+writes data/pages.json. Outgoing links are restricted to TRUSTED_DOMAINS so the
+bot only cites reliable sources (data.ctdata.org first), and capped at
+MAX_LINKS_PER_PAGE to keep the knowledge base small and fast.
 """
 
 from __future__ import annotations
@@ -25,6 +26,48 @@ BASE_URL = "https://www.ctdata.org"
 DEFAULT_SECTIONS = ["/education"]
 OUTPUT = Path(__file__).parent / "data" / "pages.json"
 HEADERS = {"User-Agent": "CTData-Chatbot-Hackathon/1.0 (+educational demo)"}
+
+# Citation sources for the education section, in priority order. The bot only
+# keeps links to these domains; tier 0 (the actual data portal) always wins and
+# is never dropped by the per-page cap.
+TRUSTED_DOMAINS = [
+    "data.ctdata.org",        # CTData's data portal — always the top source
+    "public-edsight.ct.gov",  # CT Dept. of Education portal
+    "ct.gov",                 # State of Connecticut (covers portal.ct.gov)
+    "census.gov",             # U.S. Census Bureau (covers data.census.gov)
+    "ed.gov",                 # U.S. Dept. of Education (covers nces.ed.gov)
+    "ctdata.org",             # CTData's own pages (matches www.ctdata.org)
+]
+MAX_LINKS_PER_PAGE = 25
+
+
+def domain_tier(url: str) -> int | None:
+    """Return the priority of a URL's domain, or None if untrusted.
+
+    Explicit TRUSTED_DOMAINS win first; any other official .gov site is
+    accepted at the lowest priority.
+    """
+    netloc = urlparse(url).netloc.lower().removeprefix("www.")
+    for tier, domain in enumerate(TRUSTED_DOMAINS):
+        if netloc == domain or netloc.endswith("." + domain):
+            return tier
+    if netloc.endswith(".gov"):
+        return len(TRUSTED_DOMAINS)
+    return None
+
+
+def reputable_links(links: list[dict], max_links: int = MAX_LINKS_PER_PAGE) -> list[dict]:
+    """Keep only trusted sources, best priority first, at most max_links.
+
+    Tier-0 (data.ctdata.org) links are always kept in full; the cap only
+    trims lower-priority links.
+    """
+    unique = {l["url"]: l for l in links if domain_tier(l["url"]) is not None}
+    ranked = sorted(unique.values(), key=lambda l: (domain_tier(l["url"]), l["label"].lower()))
+    top = [l for l in ranked if domain_tier(l["url"]) == 0]
+    rest = [l for l in ranked if domain_tier(l["url"]) != 0]
+    keep = top + rest[: max(0, max_links - len(top))]
+    return [{"label": l["label"], "url": l["url"]} for l in keep]
 
 # Site-wide menu/footer pages that every page links to; not section content.
 NAV_PATHS = {
@@ -76,7 +119,7 @@ def extract(html: str, url: str) -> dict:
     return {"url": url, "title": title, "text": text, "links": links}
 
 
-def crawl(sections: list[str], max_pages: int, delay: float) -> list[dict]:
+def crawl(sections: list[str], max_pages: int, delay: float, max_links: int) -> list[dict]:
     queue = [normalize(urljoin(BASE_URL, s)) for s in sections]
     section_paths = [urlparse(u).path for u in queue]
     seen: set[str] = set()
@@ -95,9 +138,10 @@ def crawl(sections: list[str], max_pages: int, delay: float) -> list[dict]:
             continue
 
         page = extract(resp.text, url)
+        page["links"] = reputable_links(page["links"], max_links)
         page["section"] = next((p for p in section_paths if p in url), section_paths[0])
         pages.append(page)
-        print(f"  [{len(pages)}] {page['title']} ({len(page['text'])} chars)")
+        print(f"  [{len(pages)}] {page['title']} ({len(page['text'])} chars, {len(page['links'])} trusted links)")
 
         # Only the section pages themselves fan out; sub-pages are leaves.
         # This keeps the crawl focused on the section instead of the whole site.
@@ -115,12 +159,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--start", action="append", help="section path, e.g. /education (repeatable)")
     parser.add_argument("--max-pages", type=int, default=40)
+    parser.add_argument("--max-links", type=int, default=MAX_LINKS_PER_PAGE,
+                        help="trusted citation links kept per page (tier-0 data.ctdata.org links always kept)")
     parser.add_argument("--delay", type=float, default=1.0, help="seconds between requests (be polite)")
     args = parser.parse_args()
 
     sections = args.start or DEFAULT_SECTIONS
     print(f"Crawling {sections} ...")
-    pages = crawl(sections, args.max_pages, args.delay)
+    pages = crawl(sections, args.max_pages, args.delay, args.max_links)
     OUTPUT.parent.mkdir(exist_ok=True)
     OUTPUT.write_text(json.dumps(pages, indent=2, ensure_ascii=False))
     print(f"Saved {len(pages)} pages to {OUTPUT}")

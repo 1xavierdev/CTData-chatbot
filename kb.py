@@ -17,6 +17,7 @@ from collections import Counter
 from pathlib import Path
 
 import lmstudio
+from scraper import reputable_links
 
 DATA_DIR = Path(__file__).parent / "data"
 PAGES_FILE = DATA_DIR / "pages.json"
@@ -54,9 +55,11 @@ def build_chunks(pages: list[dict]) -> list[dict]:
     for page in pages:
         for i, text in enumerate(chunk_text(page["text"])):
             chunks.append({"id": f"{page['url']}#{i}", "url": page["url"], "title": page["title"], "text": text})
-        # A separate "links" chunk lets the bot point people at the actual dataset pages.
+        # A separate "links" chunk lets the bot point people at the actual dataset
+        # pages. Filter again here so rebuilding from an old pages.json still
+        # drops untrusted sources.
         if page.get("links"):
-            lines = sorted({f"- {l['label']}: {l['url']}" for l in page["links"] if len(l["label"]) > 3})
+            lines = sorted({f"- {l['label']}: {l['url']}" for l in reputable_links(page["links"]) if len(l["label"]) > 3})
             chunks.append({
                 "id": f"{page['url']}#links",
                 "url": page["url"],
@@ -98,20 +101,35 @@ class KnowledgeBase:
             scores.append(s)
         return scores
 
-    def search(self, query: str, k: int = 4) -> list[dict]:
+    def _scores(self, query: str) -> list[float] | None:
+        """Similarity score per chunk, or None when nothing is relevant."""
         if not self.chunks:
-            return []
-        scores = None
+            return None
         if self.has_vectors:
             qvec = lmstudio.embed([query])
             if qvec:
-                scores = [cosine(qvec[0], c["vector"]) for c in self.chunks]
+                return [cosine(qvec[0], c["vector"]) for c in self.chunks]
+        scores = self.bm25(query)
+        return scores if max(scores) > 0 else None
+
+    def _format(self, i: int, scores: list[float]) -> dict:
+        return {**{key: self.chunks[i][key] for key in ("id", "url", "title", "text")}, "score": scores[i]}
+
+    def search(self, query: str, k: int = 4) -> list[dict]:
+        scores = self._scores(query)
         if scores is None:
-            scores = self.bm25(query)
-            if max(scores) <= 0:
-                return []
+            return []
         ranked = sorted(range(len(self.chunks)), key=lambda i: scores[i], reverse=True)[:k]
-        return [{**{key: self.chunks[i][key] for key in ("id", "url", "title", "text")}, "score": scores[i]} for i in ranked]
+        return [self._format(i, scores) for i in ranked]
+
+    def search_links(self, query: str, k: int = 2) -> list[dict]:
+        """Rank only the '#links' chunks, so answers can reference and compare datasets."""
+        scores = self._scores(query)
+        if scores is None:
+            return []
+        links = [i for i, c in enumerate(self.chunks) if c["id"].endswith("#links")]
+        ranked = sorted(links, key=lambda i: scores[i], reverse=True)[:k]
+        return [self._format(i, scores) for i in ranked]
 
 
 def cosine(a: list[float], b: list[float]) -> float:
