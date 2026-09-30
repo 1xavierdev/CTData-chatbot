@@ -67,6 +67,15 @@ cd frontend && npx ng test --watch=false
 | `frontend/src/app/chatbot/` | Chat widget: launcher, 80% dialog, onboarding, chat, sources |
 | `frontend/src/app/home/`, `layout/` | Mock CTData home page |
 | `app.py` | Original rule-based CLI prototype |
+| `scrape_ctdata.py` | Alternate corpus builder. Layer 1 scrapes ctdata.org topic pages (education); Layer 2 pulls dataset metadata + CSVs from the data.ctdata.org CKAN API (portal temporarily down, so re-run when it's back) |
+| `ctdata_corpus/ctdata_corpus.jsonl` | Output of `scrape_ctdata.py`: one JSON record per topic page (`source`, `topic`, `url`, `text`, `dataset_links`) |
+
+## Key findings about CTData
+
+- **CTData.org** is the brochure site; actual datasets live on **data.ctdata.org** (CKAN portal, currently down) and **EdSight** (https://public-edsight.ct.gov, the CT Dept. of Education portal; all education dataset links point there).
+- Education datasets share consistent filter dimensions: race/ethnicity, gender, English Learner status, free/reduced meal eligibility, special education status, homelessness, foster care. That makes a clean schema for natural-language-to-query.
+- CTData already runs a human data "helpline" (~200 requests/yr). The LLM essentially automates it, which is good pitch framing.
+- Be polite when scraping: both scrapers use a delay between requests and a descriptive User-Agent.
 
 ## Expanding beyond Education
 
