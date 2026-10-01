@@ -1,7 +1,11 @@
 import unittest
 from unittest import mock
 
+from bs4 import BeautifulSoup
+
+import lmstudio
 import rag
+import scraper
 import server
 from kb import KnowledgeBase, build_chunks, chunk_text
 
@@ -65,6 +69,90 @@ class RagTests(unittest.TestCase):
         sent = chat.call_args[0][0]
         self.assertIn("8th-grade", sent[0]["content"])
         self.assertIn("Four Year Graduation Rates", sent[-1]["content"])
+
+
+class NotFoundTests(unittest.TestCase):
+    def setUp(self):
+        self.kb = KnowledgeBase(build_chunks(PAGES))
+
+    def passage(self, score, text="Chronic Absenteeism statewide 23.7%"):
+        return [{"id": "x#0", "url": "https://x", "title": "EdSight: Chronic Absenteeism", "text": text,
+                 "score": score, "match": "semantic"}]
+
+    def test_off_topic_question_skips_the_model(self):
+        with mock.patch("lmstudio.chat") as chat:
+            result = rag.answer(self.kb, "What's the weather forecast?", {})
+        chat.assert_not_called()
+        self.assertEqual(result, {"answer": rag.NOT_FOUND, "sources": [], "mode": "not_found"})
+
+    def test_low_similarity_is_not_found(self):
+        with mock.patch.object(self.kb, "search", return_value=self.passage(0.45)), mock.patch("lmstudio.chat") as chat:
+            result = rag.answer(self.kb, "Who won the chronic bowl?", {})
+        chat.assert_not_called()
+        self.assertEqual(result["mode"], "not_found")
+
+    def test_no_topic_words_in_context_is_not_found(self):
+        with mock.patch.object(self.kb, "search", return_value=self.passage(0.72)), mock.patch("lmstudio.chat") as chat:
+            result = rag.answer(self.kb, "What is the unemployment rate?", {})
+        chat.assert_not_called()
+        self.assertEqual(result["mode"], "not_found")
+
+    def test_model_marker_becomes_not_found(self):
+        with mock.patch.object(self.kb, "search", return_value=self.passage(0.7)), \
+                mock.patch("lmstudio.chat", return_value="NOT_IN_KB"):
+            result = rag.answer(self.kb, "chronic absenteeism in my kid's school", {})
+        self.assertEqual(result["mode"], "not_found")
+
+    def test_offline_needs_every_topic_word(self):
+        with mock.patch.object(self.kb, "search", return_value=self.passage(0.72)), \
+                mock.patch("lmstudio.chat", return_value=None):
+            partial = rag.answer(self.kb, "How many COVID cases were chronic?", {})
+            full = rag.answer(self.kb, "chronic absenteeism statewide", {})
+        self.assertEqual(partial["mode"], "not_found")
+        self.assertEqual(full["mode"], "offline")
+
+
+class LmStudioTests(unittest.TestCase):
+    def reply(self, content):
+        resp = mock.Mock()
+        resp.json.return_value = {"choices": [{"message": {"content": content}}]}
+        return resp
+
+    def test_qwen3_thinking_is_disabled_and_hidden(self):
+        with mock.patch("lmstudio.chat_model", return_value="qwen/qwen3-8b"), \
+                mock.patch("requests.post", return_value=self.reply("<think>hmm</think> Hi")) as post:
+            self.assertEqual(lmstudio.chat([{"role": "user", "content": "q"}]), "Hi")
+        sent = post.call_args.kwargs["json"]
+        self.assertTrue(sent["messages"][-1]["content"].endswith("/no_think"))
+        self.assertEqual(sent["reasoning_effort"], "none")
+
+    def test_empty_reply_counts_as_no_answer(self):
+        with mock.patch("lmstudio.chat_model", return_value="m"), \
+                mock.patch("requests.post", return_value=self.reply("<think>ran out of tokens</think>")):
+            self.assertIsNone(lmstudio.chat([{"role": "user", "content": "q"}]))
+
+
+class EdsightTableTests(unittest.TestCase):
+    def test_multi_row_headers_become_one_line_per_year(self):
+        table = BeautifulSoup("""<table>
+            <tr><td>Chronic Absenteeism, Trend</td></tr><tr><td>Export .csv file</td></tr>
+            <tr><th></th><th colspan="2">2021-22</th><th colspan="2">2022-23</th></tr>
+            <tr><th>Organization</th><th>Count</th><th>%</th><th>Count</th><th>%</th></tr>
+            <tr><th>State of Connecticut</th><td>117,513</td><td>23.7</td><td>99,071</td><td>20.0</td></tr>
+        </table>""", "html.parser").table
+        self.assertEqual(scraper.table_lines(table), [
+            "Chronic Absenteeism, Trend",
+            "State of Connecticut, 2021-22: Count 117,513; % 23.7",
+            "State of Connecticut, 2022-23: Count 99,071; % 20.0",
+        ])
+
+    def test_rowspan_labels_keep_values_aligned(self):
+        table = BeautifulSoup("""<table>
+            <tr><th>District</th><th>Subject</th><th>2021-22</th></tr>
+            <tr><th rowspan="2">State</th><td>ELA</td><td>49.1</td></tr>
+            <tr><td>Math</td><td>40.0</td></tr>
+        </table>""", "html.parser").table
+        self.assertEqual(scraper.table_lines(table), ["State, ELA, 2021-22: 49.1", "State, Math, 2021-22: 40.0"])
 
 
 class ApiTests(unittest.TestCase):

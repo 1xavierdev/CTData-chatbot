@@ -15,7 +15,7 @@
     <div class="bot-avatar" aria-hidden="true">CT</div>
     <div class="titles">
       <h2 id="chat-title">CTData Assistant</h2>
-      <p>Education data · answers tailored to you</p>
+      <p>Connecticut data · answers tailored to you</p>
     </div>
     @if (!onboarding()) {
       <button class="ghost" (click)="restart()" title="Answer the profile questions again">Change profile</button>
@@ -51,14 +51,8 @@
         } @else {
           <p class="muted">General audience</p>
         }
-        <h3>Try asking</h3>
-        <ul class="suggestions">
-          @for (q of suggestions; track q) {
-            <li><button (click)="choose(q)" [disabled]="loading()">{{ q }}</button></li>
-          }
-        </ul>
       }
-      <p class="scope">Currently answering from <a href="https://www.ctdata.org/education" target="_blank" rel="noopener">ctdata.org/education</a>. More sections coming soon.</p>
+      <p class="scope">Answering from <a href="https://www.ctdata.org/data-by-topic" target="_blank" rel="noopener">ctdata.org/data-by-topic</a> and the articles it links to.</p>
     </aside>
 
     <div class="conversation">
@@ -70,6 +64,9 @@
             }
             <div class="bubble-wrap">
               <div class="bubble" [innerHTML]="m.content | formatMessage"></div>
+              @if (m.chart) {
+                <app-chart-view [spec]="m.chart" [key]="i" />
+              }
               @if (m.sources?.length) {
                 <div class="sources">
                   <span>Sources:</span>
@@ -78,8 +75,22 @@
                   }
                 </div>
               }
+              @if (canExport(m)) {
+                <div class="exports">
+                  <span>Save as:</span>
+                  <button type="button" (click)="exportMessage(i, 'pdf')" [disabled]="!!exporting()">
+                    {{ exporting() === i + ':pdf' ? 'Creating PDF…' : 'PDF' }}
+                  </button>
+                  <button type="button" (click)="exportMessage(i, 'pptx')" [disabled]="!!exporting()">
+                    {{ exporting() === i + ':pptx' ? 'Creating PowerPoint…' : 'PowerPoint' }}
+                  </button>
+                </div>
+              }
               @if (m.mode === 'offline') {
-                <div class="mode">Offline mode: showing matching content from the site (LM Studio not connected)</div>
+                <div class="mode">Offline mode: showing matching content from the site (the AI model is not running or didn't respond in time)</div>
+              }
+              @if (m.mode === 'not_found') {
+                <div class="mode">Not in the knowledge base</div>
               }
               @if (m.options && isLast(i)) {
                 <div class="chips">

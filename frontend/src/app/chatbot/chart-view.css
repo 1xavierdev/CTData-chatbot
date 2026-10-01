@@ -1,0 +1,31 @@
+:host { display: block; margin-top: 10px; }
+.chart {
+  margin: 0;
+  padding: 12px 14px 8px;
+  background: #fff;
+  border: 1px solid var(--chat-border, #dde3ea);
+  border-radius: 12px;
+}
+figcaption { color: var(--chat-navy, #13294b); font-weight: 600; font-size: 13.5px; line-height: 1.35; margin-bottom: 8px; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+.segmented { display: inline-flex; border: 1px solid var(--chat-border, #dde3ea); border-radius: 8px; overflow: hidden; }
+.segmented button, .plain {
+  padding: 4px 10px;
+  border: 0;
+  background: #fff;
+  color: #4a5663;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.segmented button + button { border-left: 1px solid var(--chat-border, #dde3ea); }
+.segmented button.on { background: var(--chat-accent, #0f8b8d); color: #fff; }
+.plain { border: 1px solid var(--chat-border, #dde3ea); border-radius: 8px; }
+.plain:hover, .segmented button:hover:not(.on) { background: #f0f4f7; }
+.canvas-box { position: relative; height: 260px; }
+.table-box { max-height: 260px; overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th, td { padding: 5px 8px; border-bottom: 1px solid #edf1f4; text-align: right; }
+th:first-child, thead th { text-align: left; }
+thead th { color: var(--chat-navy, #13294b); position: sticky; top: 0; background: #fff; }
+.hint { margin: 6px 0 0; color: #8a95a1; font-size: 11px; }

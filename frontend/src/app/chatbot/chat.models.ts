@@ -1,3 +1,22 @@
+/**
+ * llm: written by the model; offline: raw matching content (model unavailable);
+ * not_found: outside the knowledge base; export: a file request for the previous answer.
+ */
+export type ChatMode = 'llm' | 'offline' | 'not_found' | 'export';
+
+export type ChartType = 'line' | 'bar' | 'doughnut';
+export type ExportFormat = 'pdf' | 'pptx';
+
+/** Built by charts.py; every number comes from the knowledge base. */
+export interface ChartSpec {
+  type: ChartType;
+  title: string;
+  unit: string;
+  labels: string[];
+  series: { name: string; values: (number | null)[] }[];
+  source?: string;
+}
+
 export interface ChatProfile {
   profession?: string;
   age?: string;
@@ -14,7 +33,10 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   sources?: Source[];
-  mode?: 'llm' | 'offline';
+  mode?: ChatMode;
+  chart?: ChartSpec;
+  /** The question this message answers (used as the title of exported files). */
+  question?: string;
   /** Quick-reply chips shown under a bot message (used during onboarding). */
   options?: string[];
 }
@@ -22,7 +44,20 @@ export interface ChatMessage {
 export interface ChatResponse {
   answer: string;
   sources: Source[];
-  mode: 'llm' | 'offline';
+  mode: ChatMode;
+  chart?: ChartSpec;
+  /** The user asked for this answer (or, with export_previous, the previous one) as a file. */
+  export?: ExportFormat;
+  export_previous?: boolean;
+}
+
+export interface ExportRequest {
+  format: ExportFormat;
+  title: string;
+  answer: string;
+  sources: Source[];
+  chart?: ChartSpec;
+  chart_png?: string | null;
 }
 
 export interface OnboardingStep {
@@ -70,12 +105,4 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     question: 'Last one: how comfortable are you working with data?',
     options: ['New to data', 'Some experience', 'Data expert'],
   },
-];
-
-export const SUGGESTED_QUESTIONS = [
-  'Where can I find four-year graduation rates?',
-  'What data do you have on chronic absenteeism?',
-  'Tell me about student loan debt in Connecticut',
-  'What is the PSEO data?',
-  'How can I see Smarter Balanced test results?',
 ];

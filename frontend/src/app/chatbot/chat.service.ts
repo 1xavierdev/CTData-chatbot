@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
-import { ChatMessage, ChatProfile, ChatResponse } from './chat.models';
+import { Observable, firstValueFrom } from 'rxjs';
+import { ChatMessage, ChatProfile, ChatResponse, ExportRequest } from './chat.models';
 
 const PROFILE_KEY = 'ctdata-chat-profile';
 
@@ -15,6 +15,17 @@ export class ChatService {
       profile,
       history: history.map(({ role, content }) => ({ role, content })),
     });
+  }
+
+  /** Build a PDF or PowerPoint of an answer on the server and save it in the browser. */
+  async download(request: ExportRequest): Promise<void> {
+    const blob = await firstValueFrom(this.http.post('/api/export', request, { responseType: 'blob' }));
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${request.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'ctdata-answer'}.${request.format}`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   loadProfile(): ChatProfile | null {

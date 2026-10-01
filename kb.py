@@ -106,12 +106,16 @@ class KnowledgeBase:
             qvec = lmstudio.embed([query])
             if qvec:
                 scores = [cosine(qvec[0], c["vector"]) for c in self.chunks]
+        semantic = scores is not None
         if scores is None:
             scores = self.bm25(query)
             if max(scores) <= 0:
                 return []
         ranked = sorted(range(len(self.chunks)), key=lambda i: scores[i], reverse=True)[:k]
-        return [{**{key: self.chunks[i][key] for key in ("id", "url", "title", "text")}, "score": scores[i]} for i in ranked]
+        # "semantic" scores are cosine similarities (0-1); "keyword" scores are unbounded BM25.
+        match = "semantic" if semantic else "keyword"
+        return [{**{key: self.chunks[i][key] for key in ("id", "url", "title", "text")}, "score": scores[i], "match": match}
+                for i in ranked]
 
 
 def cosine(a: list[float], b: list[float]) -> float:

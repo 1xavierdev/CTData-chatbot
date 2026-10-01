@@ -142,19 +142,6 @@
 .profile { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; margin: 0 0 22px; }
 .profile dt { color: #6b7785; }
 .profile dd { margin: 0; color: var(--chat-navy); font-weight: 600; }
-.suggestions { list-style: none; margin: 0 0 20px; padding: 0; display: grid; gap: 8px; }
-.suggestions button {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--chat-border);
-  border-radius: 10px;
-  background: #fff;
-  color: var(--chat-navy);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.suggestions button:hover:not(:disabled) { border-color: var(--chat-accent); }
 .scope { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--chat-border); color: #6b7785; font-size: 12.5px; line-height: 1.5; }
 .scope a { color: var(--chat-accent); }
 
@@ -232,3 +219,15 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 3px sol
   .panel, .launcher, .msg, .backdrop { transition: none; animation: none; }
   .launcher::after { animation: none; }
 }
+.exports { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: #6b7785; }
+.exports button {
+  padding: 3px 10px;
+  border: 1px solid var(--chat-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--chat-navy);
+  font: inherit;
+  cursor: pointer;
+}
+.exports button:hover:not(:disabled) { border-color: var(--chat-accent); color: var(--chat-accent); }
+.exports button:disabled { opacity: 0.6; cursor: default; }

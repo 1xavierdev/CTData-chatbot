@@ -1,0 +1,42 @@
+<figure class="chart">
+  <figcaption>{{ spec().title }}</figcaption>
+  <div class="toolbar" role="toolbar" aria-label="Chart options">
+    <div class="segmented">
+      @for (t of types(); track t) {
+        <button type="button" [class.on]="type() === t && !showTable()" (click)="type.set(t); showTable.set(false)">
+          {{ t === 'line' ? 'Line' : t === 'bar' ? 'Bar' : 'Doughnut' }}
+        </button>
+      }
+      <button type="button" [class.on]="showTable()" (click)="showTable.set(!showTable())">Table</button>
+    </div>
+    <button type="button" class="plain" (click)="download()" title="Download this chart as a PNG image">⬇ PNG</button>
+  </div>
+  <div class="canvas-box" [hidden]="showTable()">
+    <canvas #canvas role="img" [attr.aria-label]="spec().title"></canvas>
+  </div>
+  @if (showTable()) {
+    <div class="table-box">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            @for (s of spec().series; track s.name) {
+              <th>{{ s.name }}{{ unitSuffix() }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (label of spec().labels; track $index; let i = $index) {
+            <tr>
+              <th>{{ label }}</th>
+              @for (s of spec().series; track s.name) {
+                <td>{{ format(s.values[i]) }}</td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+  <p class="hint">Hover for values{{ hasLegend() ? ' · click a legend item to hide it' : '' }}</p>
+</figure>

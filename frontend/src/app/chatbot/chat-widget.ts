@@ -6,21 +6,23 @@ import {
   inject,
   signal,
   viewChild,
+  viewChildren,
 } from '@angular/core';
 import { TitleCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   ChatMessage,
   ChatProfile,
+  ExportFormat,
   ONBOARDING_STEPS,
-  SUGGESTED_QUESTIONS,
 } from './chat.models';
 import { ChatService } from './chat.service';
+import { ChartView } from './chart-view';
 import { FormatMessagePipe } from './format-message.pipe';
 
 @Component({
   selector: 'app-chat-widget',
-  imports: [FormsModule, FormatMessagePipe, TitleCasePipe],
+  imports: [FormsModule, FormatMessagePipe, TitleCasePipe, ChartView],
   templateUrl: './chat-widget.html',
   styleUrl: './chat-widget.css',
   host: { '(document:keydown.escape)': 'close()' },
@@ -29,11 +31,12 @@ export class ChatWidget {
   private readonly chat = inject(ChatService);
 
   protected readonly steps = ONBOARDING_STEPS;
-  protected readonly suggestions = SUGGESTED_QUESTIONS;
 
   protected readonly isOpen = signal(false);
   protected readonly messages = signal<ChatMessage[]>([]);
   protected readonly loading = signal(false);
+  /** "<message index>:<format>" while that file is being built. */
+  protected readonly exporting = signal<string | null>(null);
   protected readonly profile = signal<ChatProfile | null>(this.chat.loadProfile());
   /** Index into ONBOARDING_STEPS while onboarding; -1 once the profile is complete. */
   protected readonly step = signal(this.profile() ? -1 : 0);
@@ -46,7 +49,7 @@ export class ChatWidget {
   protected readonly onboarding = computed(() => this.step() >= 0);
   protected readonly placeholder = computed(() => {
     const s = this.step();
-    if (s < 0) return 'Ask about Connecticut education data…';
+    if (s < 0) return 'Ask about Connecticut data…';
     return this.steps[s].freeText ? 'Pick an option or type your answer…' : 'Pick an option above…';
   });
   protected readonly profileSummary = computed(() => {
@@ -56,6 +59,7 @@ export class ChatWidget {
 
   private readonly scroller = viewChild<ElementRef<HTMLElement>>('scroller');
   private readonly inputEl = viewChild<ElementRef<HTMLTextAreaElement>>('input');
+  private readonly charts = viewChildren(ChartView);
 
   constructor() {
     afterRenderEffect(() => {
@@ -121,8 +125,7 @@ export class ChatWidget {
     if (p) {
       this.push({
         role: 'assistant',
-        content: `Welcome back! I'll keep tailoring answers for you${p.profession ? ` as a **${p.profession}**` : ''}. What would you like to know about Connecticut education data?`,
-        options: this.suggestions.slice(0, 3),
+        content: `Welcome back! I'll keep tailoring answers for you${p.profession ? ` as a **${p.profession}**` : ''}. What would you like to know about Connecticut data?`,
       });
       this.chatStart = this.messages().length;
       return;
@@ -130,7 +133,7 @@ export class ChatWidget {
     this.push({
       role: 'assistant',
       content:
-        "Hi! I'm the **CTData Assistant**. I can help you find and understand Connecticut **education data**.\n\nSo I can explain things in a way that's most useful for you, I'll ask 4 quick questions.",
+        "Hi! I'm the **CTData Assistant**. I can help you find and understand **Connecticut data**: education, health, housing, the economy, population and more.\n\nSo I can explain things in a way that's most useful for you, I'll ask 4 quick questions.",
     });
     this.askStep(0);
   }
@@ -161,9 +164,8 @@ export class ChatWidget {
     this.push({
       role: 'assistant',
       content: who
-        ? `Thanks! I'll tailor my answers for you (${who}). What would you like to know? Here are some ideas:`
-        : 'No problem! What would you like to know? Here are some ideas:',
-      options: this.suggestions,
+        ? `Thanks! I'll tailor my answers for you (${who}). What would you like to know?`
+        : 'No problem! What would you like to know?',
     });
     this.chatStart = this.messages().length;
   }
@@ -174,8 +176,30 @@ export class ChatWidget {
     this.loading.set(true);
     this.chat.ask(text, this.profile() ?? {}, history).subscribe({
       next: (res) => {
-        this.push({ role: 'assistant', content: res.answer, sources: res.sources, mode: res.mode });
+        if (res.export_previous) {
+          // "make a ppt of this": export the latest real answer.
+          const list = this.messages();
+          let target = list.length - 1;
+          while (target >= 0 && !this.canExport(list[target])) target--;
+          this.push({
+            role: 'assistant',
+            content: target < 0 ? 'Ask me a question first, then I can turn the answer into a PDF or PowerPoint.' : res.answer,
+            mode: res.mode,
+          });
+          this.loading.set(false);
+          if (target >= 0 && res.export) void this.exportMessage(target, res.export);
+          return;
+        }
+        this.push({
+          role: 'assistant',
+          content: res.answer,
+          sources: res.sources,
+          mode: res.mode,
+          chart: res.chart,
+          question: text,
+        });
         this.loading.set(false);
+        if (res.export) void this.exportMessage(this.messages().length - 1, res.export);
       },
       error: () => {
         this.push({
@@ -185,6 +209,35 @@ export class ChatWidget {
         this.loading.set(false);
       },
     });
+  }
+
+  protected canExport(m: ChatMessage): boolean {
+    return m.role === 'assistant' && (m.mode === 'llm' || m.mode === 'offline');
+  }
+
+  /** Download one answer (with its chart, if any) as a PDF or PowerPoint file. */
+  protected async exportMessage(index: number, format: ExportFormat): Promise<void> {
+    const m = this.messages()[index];
+    if (!m || this.exporting()) return;
+    this.exporting.set(`${index}:${format}`);
+    try {
+      // Wait a tick so a chart that was just added has rendered, then capture it for the PDF.
+      await new Promise((resolve) => setTimeout(resolve));
+      const view = this.charts().find((c) => c.key() === index);
+      const chartPng = m.chart && format === 'pdf' ? await view?.toPng() : null;
+      await this.chat.download({
+        format,
+        title: m.question ?? 'CTData Assistant answer',
+        answer: m.content,
+        sources: m.sources ?? [],
+        chart: m.chart,
+        chart_png: chartPng,
+      });
+    } catch {
+      this.push({ role: 'assistant', content: "Sorry, I couldn't create that file. Please try again." });
+    } finally {
+      this.exporting.set(null);
+    }
   }
 
   private push(message: ChatMessage): void {
